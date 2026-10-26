@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TokoAir - Kasir Firebase</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    
+    <!-- Pustaka Firebase -->
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+
+    <script>
+        tailwind.config = { darkMode: 'class' }
+        if (localStorage.getItem('theme') === 'dark' || (!('theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+            document.documentElement.classList.add('dark');
+        } else {
+            document.documentElement.classList.remove('dark');
+        }
+    </script>
+</head>
+<body class="bg-gray-50 dark:bg-gray-900 font-sans text-gray-900 dark:text-gray-100 transition-colors duration-300">
+
+    <nav class="bg-white dark:bg-gray-800 border-b border-gray-100 dark:border-gray-700 shadow-sm sticky top-0 z-50">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between h-16 items-center">
+                <div class="flex items-center gap-2">
+                    <div class="bg-blue-600 p-2 rounded-xl text-white font-bold">TA</div>
+                    <span class="text-xl font-extrabold tracking-tight">Toko<span class="text-blue-600 dark:text-blue-400">Air</span></span>
+                </div>
+                <div class="flex items-center gap-4">
+                    <button onclick="toggleModal('modalTransaksi')" class="bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold py-2 px-4 rounded-xl transition">+ Transaksi Baru</button>
+                    <button id="theme-toggle" class="p-2 text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-xl transition">🌙/☀️</button>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div id="loading" class="text-center py-4 text-blue-500 font-bold hidden">Menghubungkan ke Firebase...</div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+            <div class="bg-white dark:bg-gray-800 p-5 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700">
+                <p class="text-xs font-bold text-gray-400 uppercase">Pemasukan</p>
+                <p id="txt-income" class="text-xl font-bold text-emerald-500">Rp 0</p>
+            </div>
+            <div class="bg-white dark:bg-gray-800 p-5 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700">
+                <p class="text-xs font-bold text-gray-400 uppercase">Pengeluaran</p>
+                <p id="txt-expense" class="text-xl font-bold text-rose-500">Rp 0</p>
+            </div>
+            <div class="bg-blue-600 p-5 rounded-2xl shadow-sm text-white">
+                <p class="text-xs font-bold text-blue-200 uppercase">Laba Bersih</p>
+                <p id="txt-balance" class="text-xl font-bold">Rp 0</p>
+            </div>
+            <div class="bg-white dark:bg-gray-800 p-5 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700">
+                <p class="text-xs font-bold text-gray-400 uppercase">Galon Terjual</p>
+                <p id="txt-gallons" class="text-xl font-bold text-indigo-500">0 Galon</p>
+            </div>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
+            <div class="bg-white dark:bg-gray-800 p-5 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 flex justify-between items-center">
+                <div>
+                    <p class="text-xs font-bold text-gray-400 uppercase">Sisa Air Toren</p>
+                    <p class="text-3xl font-bold text-cyan-500"><span id="txt-toren">0</span> <span class="text-sm text-gray-400">/ 8.300 L</span></p>
+                </div>
+                <div class="flex gap-2">
+                    <button onclick="isiToren(8300)" class="bg-cyan-50 text-cyan-600 px-4 py-2 rounded-xl text-sm font-bold border border-cyan-100">Isi Penuh</button>
+                    <button onclick="resetToren()" class="bg-rose-50 text-rose-600 px-4 py-2 rounded-xl text-sm font-bold border border-rose-100">Reset 0L</button>
+                </div>
+            </div>
+            <div class="bg-white dark:bg-gray-800 p-5 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 flex justify-between items-center">
+                <div>
+                    <p class="text-xs font-bold text-gray-400 uppercase">Stok Tutup Galon</p>
+                    <p class="text-3xl font-bold text-amber-500"><span id="txt-tutup">0</span> Pcs</p>
+                </div>
+                <button onclick="toggleModal('modalTutup')" class="bg-amber-50 text-amber-600 px-4 py-2 rounded-xl text-sm font-bold border border-amber-100">+ Beli Tutup</button>
+            </div>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+            <div class="lg:col-span-2 bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700">
+                <h3 class="text-sm font-bold text-gray-400 uppercase mb-4">Arus Kas</h3>
+                <div class="h-64"><canvas id="cashflowChart"></canvas></div>
+            </div>
+            <div class="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700">
+                <h3 class="text-sm font-bold text-gray-400 uppercase mb-4 text-center">Kapasitas Toren</h3>
+                <div class="h-64"><canvas id="torenChart"></canvas></div>
+            </div>
+        </div>
+
+        <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden">
+            <div class="p-5 border-b border-gray-100 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-800/50">
+                <h3 class="font-bold">Riwayat Transaksi</h3>
+            </div>
+            <div class="overflow-x-auto p-5">
+                <table class="w-full text-left text-sm">
+                    <thead>
+                        <tr class="text-gray-400 border-b border-gray-100 dark:border-gray-700">
+                            <th class="pb-3">Tanggal</th>
+                            <th class="pb-3">Keterangan</th>
+                            <th class="pb-3 text-center">Tipe</th>
+                            <th class="pb-3 text-right">Nominal</th>
+                        </tr>
+                    </thead>
+                    <tbody id="table-body"></tbody>
+                </table>
+            </div>
+        </div>
+    </main>
+
+    <div id="modalTransaksi" class="fixed inset-0 bg-black/50 hidden items-center justify-center z-50">
+        <div class="bg-white dark:bg-gray-800 p-6 rounded-2xl w-full max-w-md mx-4">
+            <h2 class="text-lg font-bold mb-4">Transaksi Baru</h2>
+            <div class="space-y-3">
+                <select id="input-type" class="w-full p-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600">
+                    <option value="income">Pemasukan (Jual Galon)</option>
+                    <option value="expense">Pengeluaran Lainnya</option>
+                </select>
+                <select id="input-category" class="w-full p-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600">
+                    <option value="jual_galon">Jual Galon</option>
+                    <option value="operasional">Operasional (Bensin dll)</option>
+                    <option value="gaji">Gaji</option>
+                    <option value="lainnya">Lainnya</option>
+                </select>
+                <input type="text" id="input-desc" placeholder="Keterangan" class="w-full p-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600">
+                <input type="number" id="input-qty" placeholder="Jumlah Galon / Pcs" class="w-full p-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600">
+                <input type="number" id="input-amount" placeholder="Total Uang (Rp)" class="w-full p-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600">
+                <div class="flex gap-2 justify-end mt-4">
+                    <button onclick="toggleModal('modalTransaksi')" class="px-4 py-2 bg-gray-200 dark:bg-gray-700 rounded-lg">Batal</button>
+                    <button onclick="simpanTransaksi()" class="px-4 py-2 bg-blue-600 text-white rounded-lg">Simpan</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="modalTutup" class="fixed inset-0 bg-black/50 hidden items-center justify-center z-50">
+        <div class="bg-white dark:bg-gray-800 p-6 rounded-2xl w-full max-w-md mx-4">
+            <h2 class="text-lg font-bold mb-4 text-amber-500">Beli Stok Tutup Galon</h2>
+            <div class="space-y-3">
+                <input type="number" id="input-tutup-qty" placeholder="Jumlah Tutup (Pcs)" class="w-full p-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600">
+                <input type="number" id="input-tutup-amount" placeholder="Total Harga Beli (Rp)" class="w-full p-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600">
+                <div class="flex gap-2 justify-end mt-4">
+                    <button onclick="toggleModal('modalTutup')" class="px-4 py-2 bg-gray-200 dark:bg-gray-700 rounded-lg">Batal</button>
+                    <button onclick="simpanBeliTutup()" class="px-4 py-2 bg-amber-500 text-white rounded-lg">Simpan</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
